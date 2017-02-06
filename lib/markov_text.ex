@@ -1,0 +1,2 @@
+defmodule MarkovText do
+end
