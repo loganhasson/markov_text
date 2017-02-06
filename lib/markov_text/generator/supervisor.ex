@@ -1,32 +1,42 @@
 defmodule MarkovText.Generator.Supervisor do
   use Supervisor
 
-  @generation_count 1_000
-  @text_store MarkovText.TextStore
-
   def start_link do
     Supervisor.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def generate(markov_map, max_chars \\ 140) do
+  def generate(count \\ 1_000) do
     spawn fn ->
-      do_generate(markov_map, max_chars, @text_store, @generation_count)
+      do_generate(count)
     end
   end
 
   def init(_) do
     children = [
-      worker(MarkovText.Generator.Worker, [], restart: :temporary)
+      :poolboy.child_spec(pool_name, poolboy_config, [])
     ]
 
-    supervise(children, strategy: :simple_one_for_one)
+    supervise(children, strategy: :one_for_one)
   end
 
-  defp do_generate(_markov_map, _max_chars, _text_store, 0), do: :ok
-  defp do_generate(markov_map, max_chars, text_store, count) do
-    Supervisor.start_child(__MODULE__, [markov_map, max_chars, text_store])
-    IO.puts "Started #: #{(@generation_count + 1) - count}"
+  defp do_generate(0), do: :ok
+  defp do_generate(count) do
+    spawn fn ->
+      worker = :poolboy.checkout(:markov_pool, true, :infinity)
+      IO.puts "Started #: #{(@generation_count + 1) - count}"
+      GenServer.call(worker, {:generate_text}, :infinity)
+      :poolboy.checkin(:markov_pool, worker)
+    end
 
-    do_generate(markov_map, max_chars, text_store, count - 1)
+    do_generate(count - 1)
+  end
+
+  defp pool_name, do: :markov_pool
+
+  defp poolboy_config do
+   [name: {:local, pool_name},
+    worker_module: MarkovText.Generator.Worker,
+    size: 10,
+    max_overflow: 0]
   end
 end

@@ -13,9 +13,20 @@ defmodule MarkovText.Consumer do
     GenServer.call(__MODULE__, {:markov_map})
   end
 
-  def init(chain_length) do
-    {:ok, %{chain_length: chain_length, markov_map: %{}}}
+  def mark_status_complete do
+    GenServer.cast(__MODULE__, {:mark_status_complete})
   end
+
+  def init(chain_length) do
+    {:ok, %{chain_length: chain_length, markov_map: %{}, status: :incomplete}}
+  end
+
+  def handle_cast({:mark_status_complete}, state) do
+    {:noreply, Map.put(state, :status, :done)}
+  end
+
+  def handle_call({:status}, _from, %{status: :incomplete} = state), do: {:reply, :incomplete, state}
+  def handle_call({:status}, _from, %{markov_map: markov_map} = state), do: {:reply, markov_map, state}
 
   def handle_call({:markov_map}, _from, %{markov_map: markov_map} = state) do
     {:reply, markov_map, state}

@@ -1,26 +1,40 @@
 defmodule MarkovText.Generator.Worker do
   use GenServer
 
-  def start_link(markov_map, max_chars, text_store) do
-    GenServer.start_link(__MODULE__, [markov_map, max_chars, text_store])
+  @consumer MarkovText.Consumer
+  @text_store MarkovText.TextStore
+  @max_chars 140
+
+  def start_link(_arg) do
+    GenServer.start_link(__MODULE__, :ok, [])
   end
 
-  def init([markov_map, max_chars, text_store]) do
-    send self(), {:generate_text}
-    {:ok, %{markov_map: markov_map, max_chars: max_chars, text_store: text_store}}
+  def init(:ok) do
+    send self(), {:update_markov_map}
+    {:ok, %{}}
   end
 
-  def handle_info({:generate_text}, %{markov_map: markov_map, max_chars: max_chars, text_store: text_store} = state) do
+  def handle_info({:update_markov_map}, state) do
+    case GenServer.call(@consumer, {:status}, :infinity) do
+      :incomplete ->
+        Process.send_after(self(), {:update_markov_map}, 200)
+        {:noreply, state}
+      markov_map ->
+        {:noreply, markov_map}
+    end
+  end
+
+  def handle_call({:generate_text}, _from, state) do
     starting_key =
-      Map.keys(markov_map)
+      Map.keys(state)
       |> generate_starting_key
 
-    word_list = generate_word_list(markov_map, starting_key, max_chars)
+    word_list = generate_word_list(state, starting_key, @max_chars)
 
-    GenServer.cast(text_store, {:generated_text, Enum.join(word_list, " ")})
+    GenServer.cast(@text_store, {:generated_text, Enum.join(word_list, " ")})
 
     IO.puts "DONE WORKING."
-    {:stop, :normal, :ok}
+    {:reply, :ok, state}
   end
 
   defp generate_starting_key(possible_keys) do
