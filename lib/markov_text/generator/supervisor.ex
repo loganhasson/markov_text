@@ -1,11 +1,13 @@
 defmodule MarkovText.Generator.Supervisor do
   use Supervisor
 
+  @generation_count 1_000
+
   def start_link do
     Supervisor.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def generate(count \\ 1_000) do
+  def generate(count \\ @generation_count) do
     spawn fn ->
       do_generate(count)
     end
